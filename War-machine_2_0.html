@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>War Machine Simulator</title>
+<style>
+:root{--b:min(11.5vw,50px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b0f16;font-family:system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#top{position:fixed;top:10px;left:0;right:0;text-align:center;color:#ff5a5a;font:700 13px monospace;letter-spacing:2px;text-shadow:0 0 8px #f00;pointer-events:none}
+#hud{position:fixed;left:0;right:0;bottom:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none}
+.pad,.act{display:grid;gap:5px;pointer-events:auto}
+.pad{grid-template-columns:repeat(3,var(--b))}
+.act{grid-template-columns:repeat(4,calc(var(--b)*1.05))}
+button{height:var(--b);border:1px solid #f55a;border-radius:10px;background:rgba(25,28,34,.78);color:#ffb0b0;font:700 11px sans-serif;box-shadow:0 0 8px #f333 inset;padding:0}
+button:active,button.on{background:rgba(255,50,50,.5);color:#fff}
+.w2{grid-column:span 2}
+#mg{color:#fff;border-color:#ff8a3a}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top">WAR MACHINE • <span id="st">SIAGA</span></div>
+<div id="hud">
+  <div class="pad">
+    <i></i><button data-d="u">▲</button><i></i>
+    <button data-d="l">◀</button><i></i><button data-d="r">▶</button>
+    <i></i><button data-d="d">▼</button><i></i>
+  </div>
+  <div class="act">
+    <button id="mg" class="w2">MINIGUN 💥</button><button id="rp" class="w2">REPULSOR</button>
+    <button id="bSiaga" class="w2 on">SIAGA</button><button id="bFly" class="w2">TERBANG</button>
+    <button id="cL">KAM &lt;</button><button id="cRs" class="w2">RESET KAM</button><button id="cR">KAM &gt;</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id), V3=THREE.Vector3;
+
+/* ---------- AUDIO (Web Audio API, sintetis) ---------- */
+let ac,hum,nbuf;
+function audio(){ if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); return ac; }
+function noise(){ const a=audio(); if(!nbuf){ nbuf=a.createBuffer(1,a.sampleRate*2,a.sampleRate); const d=nbuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; } return nbuf; }
+function tone(type,f1,f2,dur,vol,delay=0){
+  const a=audio(),t=a.currentTime+delay,o=a.createOscillator(),g=a.createGain();
+  o.type=type; o.frequency.setValueAtTime(f1,t); o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+dur+.05);
+}
+function sfxGun(){ // satu hentakan peluru minigun
+  const a=audio(),t=a.currentTime,s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+  s.buffer=noise(); f.type='bandpass'; f.frequency.value=1200+Math.random()*800; f.Q.value=.8;
+  g.gain.setValueAtTime(.55,t); g.gain.exponentialRampToValueAtTime(.0001,t+.07);
+  s.connect(f); f.connect(g); g.connect(a.destination); s.start(t,Math.random(),.08);
+  tone('square',160,50,.07,.25);
+}
+function sfxRepulsor(){ tone('sawtooth',500,1400,.3,.2); tone('sine',250,900,.35,.25); }
+function setHum(on){
+  const a=audio();
+  if(!hum){
+    const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+    s.buffer=noise(); s.loop=true; f.type='lowpass'; f.frequency.value=450; g.gain.value=0;
+    s.connect(f); f.connect(g); g.connect(a.destination); s.start(); hum=g;
+  }
+  hum.gain.setTargetAtTime(on?.2:0,a.currentTime,.25);
+}
+
+/* ---------- SCENE ---------- */
+const R=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));
+const S=new THREE.Scene(); S.background=new THREE.Color(0x1a2230); S.fog=new THREE.Fog(0x1a2230,35,85);
+const cam=new THREE.PerspectiveCamera(50,1,.1,200);
+function rs(){ R.setSize(innerWidth,innerHeight); cam.aspect=innerWidth/innerHeight; cam.updateProjectionMatrix(); }
+addEventListener('resize',rs); rs();
+
+S.add(new THREE.AmbientLight(0xffffff,.85));
+S.add(new THREE.HemisphereLight(0xcfe0ff,0x4a4f58,.6));
+const sun=new THREE.DirectionalLight(0xffffff,1.3); sun.position.set(6,12,8); S.add(sun);
+const fill=new THREE.DirectionalLight(0xaabbd8,.7); fill.position.set(-8,5,-6); S.add(fill);
+
+const gnd=new THREE.Mesh(new THREE.CircleGeometry(45,48),new THREE.MeshStandardMaterial({color:0x2a313d,roughness:.9}));
+gnd.rotation.x=-Math.PI/2; S.add(gnd);
+const grid=new THREE.GridHelper(90,45,0xff4040,0x3d4756); grid.position.y=.02; S.add(grid);
+const blob=new THREE.Mesh(new THREE.CircleGeometry(1.5,24),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.5}));
+blob.rotation.x=-Math.PI/2; blob.position.y=.04; S.add(blob);
+
+/* ---------- MODEL ---------- */
+const mGun=new THREE.MeshStandardMaterial({color:0x4d535c,metalness:.75,roughness:.35});
+const mSil=new THREE.MeshStandardMaterial({color:0xc4cad3,metalness:.8,roughness:.25});
+const mDark=new THREE.MeshStandardMaterial({color:0x22252a,metalness:.5,roughness:.5});
+const basic=(c,o=1,add=false)=>new THREE.MeshBasicMaterial({color:c,transparent:o<1||add,opacity:o,blending:add?THREE.AdditiveBlending:THREE.NormalBlending,depthWrite:!add,side:THREE.DoubleSide});
+const Bx=(w,h,d)=>new THREE.BoxGeometry(w,h,d), Cy=(a,b,h,s=16)=>new THREE.CylinderGeometry(a,b,h,s), Sp=r=>new THREE.SphereGeometry(r,20,16);
+const put=(p,g,m,x=0,y=0,z=0)=>{ const o=new THREE.Mesh(g,m); o.position.set(x,y,z); p.add(o); return o; };
+
+const iron=new THREE.Group(); S.add(iron);
+const body=new THREE.Group(); iron.add(body);
+
+// Pinggul & torso tegap
+put(body,Bx(1.5,.55,.9),mSil,0,2.65,0);
+put(body,Bx(1.6,.7,.9),mGun,0,3.2,0);
+put(body,Bx(2.7,1.7,1.25),mGun,0,4.25,0);
+put(body,Bx(2.75,.3,1.3),mSil,0,5.05,0);
+put(body,Bx(1.0,.2,.1),mSil,0,3.7,.62);
+put(body,Cy(.35,.4,.3),mDark,0,5.25,0);
+// Arc reactor merah
+put(body,new THREE.TorusGeometry(.4,.09,12,24),mSil,0,4.3,.64);
+put(body,Cy(.32,.32,.08,24),basic(0xff2020),0,4.3,.65).rotation.x=Math.PI/2;
+const rl=new THREE.PointLight(0xff2a2a,1.5,6); rl.position.set(0,4.3,1.2); body.add(rl);
+
+// Kepala + mata merah menyala
+const head=new THREE.Group(); head.position.set(0,5.75,0); body.add(head);
+put(head,Sp(.58),mGun).scale.set(1.05,1.1,1.1);
+put(head,Bx(.8,.8,.14),mSil,0,-.05,.58);
+put(head,Bx(.22,.08,.05),basic(0xff1a1a),-.2,.1,.66);
+put(head,Bx(.22,.08,.05),basic(0xff1a1a),.2,.1,.66);
+const eyeL=new THREE.PointLight(0xff2020,.8,3); eyeL.position.set(0,.1,1); head.add(eyeL);
+
+// Lengan (s=-1 kanan robot, s=+1 kiri; robot menghadap +Z)
+function makeArm(s){
+  const g=new THREE.Group(); g.position.set(s*1.65,4.7,0); body.add(g);
+  put(g,Sp(.6),mSil);
+  put(g,Cy(.34,.3,1.0),mGun,0,-.75,0);
+  put(g,Sp(.32),mSil,0,-1.3,0);
+  put(g,Cy(.34,.28,1.0),mGun,0,-1.85,0);
+  put(g,Bx(.6,.7,.6),mSil,0,-2.4,0);
+  return g;
+}
+const rArm=makeArm(-1), lArm=makeArm(1);
+
+// Repulsor telapak kanan + sinar merah (sumbu lokal -Y = searah lengan)
+put(rArm,Cy(.22,.22,.06,20),basic(0xff3030),0,-2.78,0);
+const palmL=new THREE.PointLight(0xff2020,.3,5); palmL.position.set(0,-2.9,0); rArm.add(palmL);
+const LEN=18;
+const g1=new THREE.CylinderGeometry(.07,.07,LEN,10); g1.translate(0,-LEN/2,0);
+const g2=new THREE.CylinderGeometry(.22,.22,LEN,14,1,true); g2.translate(0,-LEN/2,0);
+const beam=new THREE.Group(); beam.position.set(0,-2.8,0); rArm.add(beam);
+beam.add(new THREE.Mesh(g1,basic(0xffffff)));
+const outer=new THREE.Mesh(g2,basic(0xff2020,.55,true)); beam.add(outer);
+const flare=put(beam,Sp(.4),basic(0xff3030,.8,true));
+beam.visible=false;
+
+// Minigun bahu kanan (arah tembak +Z)
+const gun=new THREE.Group(); gun.position.set(-1.7,5.65,.15); body.add(gun);
+put(gun,Bx(.55,.7,1.1),mDark,0,-.1,-.2);
+put(gun,Cy(.14,.14,.5,10),mSil,0,-.45,-.2);
+put(gun,Bx(.7,.15,.6),mSil,0,-.3,-.45); // dudukan ke bahu
+const spin=new THREE.Group(); spin.position.set(0,0,.35); gun.add(spin);
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2, b=put(spin,Cy(.055,.055,1.5,8),mSil,Math.cos(a)*.17,Math.sin(a)*.17,.7);
+  b.rotation.x=Math.PI/2;
+}
+put(spin,Cy(.26,.26,.12,16),mGun,0,0,.1).rotation.x=Math.PI/2;
+put(spin,Cy(.26,.26,.1,16),mGun,0,0,1.3).rotation.x=Math.PI/2;
+const muzzle=new THREE.Object3D(); muzzle.position.set(0,0,2.2); gun.add(muzzle);
+const mflash=put(gun,Sp(.3),basic(0xffc040,.9,true),0,0,2.3); mflash.visible=false;
+const mlight=new THREE.PointLight(0xffa030,0,8); mlight.position.set(0,0,2.5); gun.add(mlight);
+
+// Gauntlet kiri (hiasan)
+put(lArm,Bx(.7,.9,.7),mGun,0,-1.9,0);
+put(lArm,Cy(.12,.12,.4),mSil,0,-2.9,0.1).rotation.x=Math.PI/2;
+
+// Kaki + api pendorong
+const legs=[],flames=[];
+[-1,1].forEach(s=>{
+  const g=new THREE.Group(); g.position.set(s*.55,2.5,0); body.add(g); legs.push(g);
+  put(g,Bx(.7,1.0,.75),mGun,0,-.55,0);
+  put(g,Sp(.36),mSil,0,-1.1,0);
+  put(g,Bx(.6,1.1,.65),mSil,0,-1.65,0);
+  put(g,Bx(.75,.28,1.15),mGun,0,-2.37,.25);
+  const f=new THREE.Group(); f.position.set(0,-2.5,.25); g.add(f);
+  const c1=new THREE.ConeGeometry(.36,2.3,14); c1.rotateX(Math.PI); c1.translate(0,-1.15,0);
+  const c2=new THREE.ConeGeometry(.19,1.5,12); c2.rotateX(Math.PI); c2.translate(0,-.75,0);
+  f.add(new THREE.Mesh(c1,basic(0xff7a00,.8,true)));
+  f.add(new THREE.Mesh(c2,basic(0xffffcc,.95,true)));
+  f.visible=false; flames.push(f);
+});
+const flameL=new THREE.PointLight(0xff8a00,0,9); flameL.position.set(0,.3,0); iron.add(flameL);
+
+/* ---------- PELURU ---------- */
+const NB=40, bullets=[];
+const bgeo=Bx(.07,.07,.9), bmat=basic(0xffd060,.95,true);
+for(let i=0;i<NB;i++){ const m=new THREE.Mesh(bgeo,bmat); m.visible=false; S.add(m); bullets.push({m,v:new V3(),life:0}); }
+let bi=0;
+function spawnBullet(){
+  const b=bullets[bi]; bi=(bi+1)%NB;
+  const p=new V3(),d=new V3();
+  muzzle.getWorldPosition(p); gun.getWorldDirection(d);
+  d.x+=(Math.random()-.5)*.03; d.y+=(Math.random()-.5)*.03; d.normalize();
+  b.m.position.copy(p); b.m.lookAt(p.clone().add(d));
+  b.v.copy(d).multiplyScalar(70); b.life=.7; b.m.visible=true;
+}
+
+/* ---------- STATE & KONTROL ---------- */
+const st={fly:false,mg:false,rp:false,az:.6,cam:0,k:{u:0,d:0,l:0,r:0}};
+function bind(el,down,up){
+  el.addEventListener('pointerdown',e=>{ e.preventDefault(); audio(); down&&down(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(n=>el.addEventListener(n,()=>up&&up()));
+}
+function setMode(fly){
+  st.fly=fly; setHum(fly);
+  $('st').textContent=fly?'TERBANG':'SIAGA';
+  $('bFly').classList.toggle('on',fly); $('bSiaga').classList.toggle('on',!fly);
+}
+let rpT=0;
+bind($('mg'),()=>{ st.mg=true; },()=>{ st.mg=false; });
+bind($('rp'),()=>{ st.rp=true; rpT=.8; pew=0; },()=>{ st.rp=false; });
+bind($('bSiaga'),()=>setMode(false));
+bind($('bFly'),()=>setMode(true));
+bind($('cL'),()=>st.cam=-1,()=>{ if(st.cam<0) st.cam=0; });
+bind($('cR'),()=>st.cam=1,()=>{ if(st.cam>0) st.cam=0; });
+bind($('cRs'),()=>{ st.az=.6; });
+document.querySelectorAll('[data-d]').forEach(b=>bind(b,()=>st.k[b.dataset.d]=1,()=>st.k[b.dataset.d]=0));
+
+// Geser layar untuk memutar kamera
+let dragX=null; const cv=$('c');
+cv.addEventListener('pointerdown',e=>dragX=e.clientX);
+cv.addEventListener('pointermove',e=>{ if(dragX!==null){ st.az-=(e.clientX-dragX)*.008; dragX=e.clientX; } });
+['pointerup','pointercancel'].forEach(n=>cv.addEventListener(n,()=>dragX=null));
+
+/* ---------- LOOP ---------- */
+const clock=new THREE.Clock(), ct=new V3(0,2.4,0);
+let pew=0, flameAmt=0, spinV=0, shotT=0, flashT=0;
+const lerp=(o,k,v,dt,sp=10)=>{ o[k]+=(v-o[k])*Math.min(1,dt*sp); };
+
+function tick(){
+  requestAnimationFrame(tick);
+  const dt=Math.min(clock.getDelta(),.05), t=clock.elapsedTime;
+  st.az+=st.cam*1.8*dt;
+
+  // D-pad relatif kamera
+  const k=st.k, ix=k.r-k.l, iz=k.u-k.d; let mv=0;
+  if(ix||iz){
+    const f=new V3(-Math.sin(st.az),0,-Math.cos(st.az)), r=new V3(Math.cos(st.az),0,-Math.sin(st.az));
+    const d=f.multiplyScalar(iz).add(r.multiplyScalar(ix)).normalize();
+    iron.position.addScaledVector(d,(st.fly?7:3.5)*dt);
+    const L=Math.hypot(iron.position.x,iron.position.z); if(L>35) iron.position.multiplyScalar(35/L);
+    let dy=Math.atan2(d.x,d.z)-iron.rotation.y; dy=Math.atan2(Math.sin(dy),Math.cos(dy));
+    iron.rotation.y+=dy*Math.min(1,dt*7); mv=1;
+  }
+  // Terbang / siaga
+  const ty=st.fly?2.2+Math.sin(t*2)*.15:0;
+  iron.position.y+=(ty-iron.position.y)*Math.min(1,dt*3);
+  lerp(body.rotation,'x',st.fly?(mv?.5:.12):0,dt,5);
+  legs.forEach(l=>lerp(l.rotation,'x',st.fly?.25:0,dt,5));
+  lerp(lArm.rotation,'x',st.fly?.3:.05,dt,5);
+  lerp(lArm.rotation,'z',.12,dt,5);
+
+  // Api pendorong
+  flameAmt+=((st.fly?1:0)-flameAmt)*Math.min(1,dt*6);
+  flames.forEach((f,i)=>{
+    f.visible=flameAmt>.03;
+    const p=1+.3*Math.sin(t*40+i*2)+.2*Math.sin(t*23+i);
+    f.scale.set(1+.1*Math.sin(t*35),flameAmt*p,1+.1*Math.sin(t*35));
+  });
+  flameL.intensity=flameAmt*(2+Math.sin(t*30));
+
+  // Repulsor: lengan lurus ke depan, sinar merah dari telapak
+  rpT-=dt;
+  const rfire=st.rp||rpT>0;
+  lerp(rArm.rotation,'x',rfire?-Math.PI/2:(st.fly?.35:.05),dt,12);
+  lerp(rArm.rotation,'z',rfire?0:-.12,dt,12);
+  beam.visible=rfire&&rArm.rotation.x<-1.3;
+  palmL.intensity=beam.visible?2.5:.3;
+  if(beam.visible){
+    const w=1+Math.sin(t*60)*.15; outer.scale.set(w,1,w);
+    flare.scale.setScalar(1+Math.sin(t*50)*.25);
+    pew-=dt; if(pew<=0){ sfxRepulsor(); pew=.35; }
+  }
+
+  // Minigun: laras berputar, peluru beruntun
+  spinV+=((st.mg?1:0)-spinV)*Math.min(1,dt*(st.mg?4:2));
+  spin.rotation.z+=spinV*28*dt;
+  if(st.mg&&spinV>.6){
+    shotT-=dt;
+    while(shotT<=0){ shotT+=.065; spawnBullet(); sfxGun(); flashT=.05; }
+  } else shotT=0;
+  flashT-=dt;
+  mflash.visible=flashT>0; if(mflash.visible) mflash.scale.setScalar(.7+Math.random()*.8);
+  mlight.intensity=flashT>0?4:0;
+  bullets.forEach(b=>{
+    if(!b.m.visible) return;
+    b.m.position.addScaledVector(b.v,dt); b.life-=dt;
+    if(b.life<=0||b.m.position.y<0) b.m.visible=false;
+  });
+
+  // Bayangan & kamera
+  blob.position.x=iron.position.x; blob.position.z=iron.position.z;
+  blob.scale.setScalar(1/(1+iron.position.y*.25)); blob.material.opacity=.5/(1+iron.position.y*.3);
+  ct.lerp(new V3(iron.position.x,2.4+iron.position.y*.5,iron.position.z),Math.min(1,dt*5));
+  cam.position.set(ct.x+Math.sin(st.az)*17,ct.y+3,ct.z+Math.cos(st.az)*17);
+  cam.lookAt(ct);
+  R.render(S,cam);
+}
+tick();
+</script>
+</body>
+</html>

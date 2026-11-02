@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MLBB 2-Player Layla Duel (Auto-Aim)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #020617;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+        }
+
+        /* Overlay UI & Controls */
+        .controls-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Player Control Area */
+        .player-side {
+            width: 48%;
+            height: 100%;
+            position: relative;
+            pointer-events: auto;
+        }
+
+        /* Header Scores */
+        .score-board {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 2px solid #334155;
+            padding: 8px 24px;
+            border-radius: 30px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 1.1rem;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            pointer-events: none;
+        }
+
+        .p1-color { color: #38bdf8; }
+        .p2-color { color: #f43f5e; }
+
+        /* Joystick Zones */
+        .joystick-container {
+            position: absolute;
+            bottom: 30px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #p1-joy-area { left: 20px; }
+        #p2-joy-area { right: 20px; }
+
+        .joystick-stick {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(56, 189, 248, 0.6);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
+            position: absolute;
+        }
+
+        #p2-joy-stick {
+            background: rgba(244, 63, 94, 0.6);
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.8);
+        }
+
+        /* Action Buttons Area */
+        .action-container {
+            position: absolute;
+            bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        #p1-actions { right: 20px; }
+        #p2-actions { left: 20px; }
+
+        .btn-skill {
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid #38bdf8;
+            color: #38bdf8;
+            font-weight: bold;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #p2-actions .btn-skill {
+            border-color: #f43f5e;
+            color: #f43f5e;
+            box-shadow: 0 0 10px rgba(244, 63, 94, 0.3);
+        }
+
+        .btn-skill:active {
+            transform: scale(0.92);
+        }
+
+        .btn-skill.ult {
+            width: 65px;
+            height: 65px;
+            border-color: #facc15;
+            color: #facc15;
+            font-size: 0.85rem;
+            box-shadow: 0 0 15px rgba(250, 204, 21, 0.5);
+        }
+
+        .cooldown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="score-board">
+        <span class="p1-color">P1 Layla: <span id="p1-score">0</span></span>
+        <span>VS</span>
+        <span class="p2-color">P2 Layla: <span id="p2-score">0</span></span>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="controls-layer">
+        <!-- Player 1 Controls -->
+        <div class="player-side">
+            <div class="joystick-container" id="p1-joy-area">
+                <div class="joystick-stick" id="p1-joy-stick"></div>
+            </div>
+            <div class="action-container" id="p1-actions">
+                <div class="btn-skill ult" id="p1-ult">ULT<div class="cooldown-overlay" id="p1-ult-cd" style="display:none;"></div></div>
+                <div class="btn-skill" id="p1-s1">S1<div class="cooldown-overlay" id="p1-s1-cd" style="display:none;"></div></div>
+                <div class="btn-skill" id="p1-atk">ATK</div>
+            </div>
+        </div>
+
+        <!-- Player 2 Controls -->
+        <div class="player-side">
+            <div class="joystick-container" id="p2-joy-area">
+                <div class="joystick-stick" id="p2-joy-stick"></div>
+            </div>
+            <div class="action-container" id="p2-actions">
+                <div class="btn-skill ult" id="p2-ult">ULT<div class="cooldown-overlay" id="p2-ult-cd" style="display:none;"></div></div>
+                <div class="btn-skill" id="p2-s1">S1<div class="cooldown-overlay" id="p2-s1-cd" style="display:none;"></div></div>
+                <div class="btn-skill" id="p2-atk">ATK</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Audio Effects via Web Audio API
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+        function playSound(freq, duration, type='sine') {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        // Hero Layla Entity
+        class Layla {
+            constructor(x, y, color, name, isP1) {
+                this.x = x;
+                this.y = y;
+                this.radius = 20;
+                this.color = color;
+                this.name = name;
+                this.isP1 = isP1;
+                this.speed = 3.2;
+                this.maxHp = 900;
+                this.hp = 900;
+                this.score = 0;
+                this.dx = 0;
+                this.dy = 0;
+                this.angle = isP1 ? 0 : Math.PI;
+
+                // Cooldowns
+                this.cdS1 = 0;
+                this.cdUlt = 0;
+            }
+
+            draw() {
+                // Glow Effect
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+
+                // Body Hero Layla
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Cannon / Meriam Layla
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x + Math.cos(this.angle) * (this.radius + 12), this.y + Math.sin(this.angle) * (this.radius + 12));
+                ctx.stroke();
+                ctx.restore();
+
+                // HP Bar
+                const barW = 50;
+                const barH = 6;
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(this.x - barW / 2, this.y - this.radius - 16, barW, barH);
+                ctx.fillStyle = this.hp > 300 ? '#4ade80' : '#f43f5e';
+                ctx.fillRect(this.x - barW / 2, this.y - this.radius - 16, (this.hp / this.maxHp) * barW, barH);
+
+                // Name Tag
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, this.x, this.y - this.radius - 20);
+            }
+
+            update() {
+                this.x += this.dx * this.speed;
+                this.y += this.dy * this.speed;
+
+                // Border Layar
+                this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+
+                if (this.dx !== 0 || this.dy !== 0) {
+                    this.angle = Math.atan2(this.dy, this.dx);
+                }
+
+                // Cooldown Timers
+                if (this.cdS1 > 0) this.cdS1 -= 1 / 60;
+                if (this.cdUlt > 0) this.cdUlt -= 1 / 60;
+            }
+
+            takeDamage(dmg, enemyHero) {
+                this.hp -= dmg;
+                playSound(150, 0.1, 'sawtooth');
+                if (this.hp <= 0) {
+                    this.hp = this.maxHp;
+                    enemyHero.score++;
+                    document.getElementById(enemyHero.isP1 ? 'p1-score' : 'p2-score').innerText = enemyHero.score;
+                    // Respawn Position
+                    this.x = this.isP1 ? canvas.width * 0.15 : canvas.width * 0.85;
+                    this.y = canvas.height / 2;
+                }
+            }
+        }
+
+        // Projectiles / Skill Effects
+        let bullets = [];
+        class Bullet {
+            constructor(x, y, color, speed, angle, damage, radius, owner, isUlt=false) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.speed = speed;
+                this.angle = angle;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.damage = damage;
+                this.radius = radius;
+                this.owner = owner;
+                this.isUlt = isUlt;
+                this.life = isUlt ? 25 : 60;
+            }
+
+            update(target) {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+
+                // Hit Detection
+                const dist = Math.hypot(this.x - target.x, this.y - target.y);
+                if (dist < this.radius + target.radius) {
+                    target.takeDamage(this.damage, this.owner);
+                    if (!this.isUlt) this.life = 0;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Inisialisasi Layla
+        const p1 = new Layla(window.innerWidth * 0.15, window.innerHeight / 2, '#38bdf8', 'P1 Layla', true);
+        const p2 = new Layla(window.innerWidth * 0.85, window.innerHeight / 2, '#f43f5e', 'P2 Layla', false);
+
+        // Joystick Setup
+        function setupJoystick(areaId, stickId, hero) {
+            const area = document.getElementById(areaId);
+            const stick = document.getElementById(stickId);
+            let activeTouchId = null;
+            let center = { x: 0, y: 0 };
+
+            area.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.changedTouches[0];
+                activeTouchId = touch.identifier;
+                const rect = area.getBoundingClientRect();
+                center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (touch.identifier === activeTouchId) {
+                        const dx = touch.clientX - center.x;
+                        const dy = touch.clientY - center.y;
+                        const dist = Math.min(Math.hypot(dx, dy), 40);
+                        const angle = Math.atan2(dy, dx);
+
+                        stick.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+                        hero.dx = Math.cos(angle) * (dist / 40);
+                        hero.dy = Math.sin(angle) * (dist / 40);
+                    }
+                }
+            });
+
+            const resetJoy = (e) => {
+                for (let touch of e.changedTouches) {
+                    if (touch.identifier === activeTouchId) {
+                        activeTouchId = null;
+                        stick.style.transform = 'translate(0px, 0px)';
+                        hero.dx = 0;
+                        hero.dy = 0;
+                    }
+                }
+            };
+            window.addEventListener('touchend', resetJoy);
+            window.addEventListener('touchcancel', resetJoy);
+        }
+
+        setupJoystick('p1-joy-area', 'p1-joy-stick', p1);
+        setupJoystick('p2-joy-area', 'p2-joy-stick', p2);
+
+        // Action Buttons Setup Helper with Auto-Aim Logic
+        function setupActions(prefix, hero, targetHero) {
+            // Basic Attack dengan Auto-Aim
+            document.getElementById(`${prefix}-atk`).addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                playSound(500, 0.08);
+
+                // Hitung Sudut Auto-Aim Mengarah Otomatis ke Target
+                const autoAimAngle = Math.atan2(targetHero.y - hero.y, targetHero.x - hero.x);
+                hero.angle = autoAimAngle; // Arahkan meriam ke lawan
+
+                bullets.push(new Bullet(hero.x, hero.y, hero.color, 12, autoAimAngle, 95, 6, hero));
+            });
+
+            // Skill 1 (Malefic Bomb - Mengikuti Arah Gerak / Arah Meriam)
+            document.getElementById(`${prefix}-s1`).addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (hero.cdS1 <= 0) {
+                    hero.cdS1 = 2.5;
+                    playSound(750, 0.15, 'triangle');
+                    
+                    // Auto-aim juga saat pakai Skill 1
+                    const autoAimAngle = Math.atan2(targetHero.y - hero.y, targetHero.x - hero.x);
+                    hero.angle = autoAimAngle;
+
+                    bullets.push(new Bullet(hero.x, hero.y, '#facc15', 15, autoAimAngle, 230, 10, hero));
+                }
+            });
+
+            // Ultimate (Destruction Rush)
+            document.getElementById(`${prefix}-ult`).addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (hero.cdUlt <= 0) {
+                    hero.cdUlt = 7;
+                    playSound(900, 0.3, 'sawtooth');
+
+                    // Auto-aim lock-on ke lawan saat Ultimate
+                    const autoAimAngle = Math.atan2(targetHero.y - hero.y, targetHero.x - hero.x);
+                    hero.angle = autoAimAngle;
+
+                    for (let i = 0; i < 5; i++) {
+                        bullets.push(new Bullet(hero.x + (i * 30 * Math.cos(autoAimAngle)), hero.y + (i * 30 * Math.sin(autoAimAngle)), '#c084fc', 22, autoAimAngle, 450, 20, hero, true));
+                    }
+                }
+            });
+        }
+
+        setupActions('p1', p1, p2);
+        setupActions('p2', p2, p1);
+
+        // UI Cooldown Update
+        function updateCooldownUI() {
+            const updateCd = (id, val) => {
+                const el = document.getElementById(id);
+                if (val > 0) {
+                    el.style.display = 'flex';
+                    el.innerText = Math.ceil(val);
+                } else {
+                    el.style.display = 'none';
+                }
+            };
+
+            updateCd('p1-s1-cd', p1.cdS1);
+            updateCd('p1-ult-cd', p1.cdUlt);
+            updateCd('p2-s1-cd', p2.cdS1);
+            updateCd('p2-ult-cd', p2.cdUlt);
+        }
+
+        // Main Game Loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Garis Pembatas Arena
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+
+            // Update & Render
+            p1.update();
+            p1.draw();
+
+            p2.update();
+            p2.draw();
+
+            bullets.forEach((b, idx) => {
+                const target = b.owner.isP1 ? p2 : p1;
+                b.update(target);
+                b.draw();
+                if (b.life <= 0) bullets.splice(idx, 1);
+            });
+
+            updateCooldownUI();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

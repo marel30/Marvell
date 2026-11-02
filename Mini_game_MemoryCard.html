@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Match Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #0f172a, #311042);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 15px;
+        }
+        .container {
+            width: 100%;
+            max-width: 360px;
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            font-size: 19px;
+            color: #c084fc;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 15px;
+        }
+        /* Papan Kartu Grid 4x4 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .card {
+            background: #1e293b;
+            height: 65px;
+            border-radius: 10px;
+            font-size: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid #334155;
+            user-select: none;
+            transition: transform 0.2s, background 0.2s;
+        }
+        .card.flipped {
+            background: #334155;
+            transform: rotateY(180deg);
+        }
+        .card.matched {
+            background: #065f46;
+            border-color: #059669;
+            cursor: default;
+        }
+        .stats {
+            font-size: 13px;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+        .btn-reset {
+            background: #9333ea;
+            color: white;
+            border: none;
+            padding: 10px;
+            font-size: 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
+            transition: 0.2s;
+        }
+        .btn-reset:active {
+            background: #7e22ce;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🧠 Memory Match</h1>
+        <div class="subtitle">Cocokkan semua pasangan emoji!</div>
+
+        <div class="stats">Jumlah Gerakan: <span id="moves">0</span></div>
+
+        <div class="grid" id="game-grid">
+            <!-- Kartu akan digenerate otomatis lewat JavaScript -->
+        </div>
+
+        <button class="btn-reset" onclick="startGame()">Acak & Main Lagi 🔄</button>
+    </div>
+
+    <script>
+        const emojis = ['🍎', '🍌', '🍉', '🍇', '🍓', '🍒', '🍍', '🥝'];
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let moves = 0;
+        let isLocked = false;
+
+        function startGame() {
+            const grid = document.getElementById("game-grid");
+            grid.innerHTML = "";
+            moves = 0;
+            matchedPairs = 0;
+            flippedCards = [];
+            isLocked = false;
+            document.getElementById("moves").innerText = moves;
+
+            // Duplikat emoji jadi 16 kartu (8 pasang) dan acak urutannya
+            let gameEmojis = [...emojis, ...emojis];
+            gameEmojis.sort(() => Math.random() - 0.5);
+
+            gameEmojis.forEach((emoji, index) => {
+                const card = document.createElement("div");
+                card.classList.add("card");
+                card.dataset.emoji = emoji;
+                card.dataset.index = index;
+                card.innerText = "❓";
+                card.addEventListener("click", flipCard);
+                grid.appendChild(card);
+            });
+        }
+
+        function flipCard() {
+            if (isLocked) return;
+            if (this.classList.contains("flipped") || this.classList.contains("matched")) return;
+
+            this.classList.add("flipped");
+            this.innerText = this.dataset.emoji;
+            flippedCards.push(this);
+
+            if (flippedCards.length === 2) {
+                moves++;
+                document.getElementById("moves").innerText = moves;
+                checkForMatch();
+            }
+        }
+
+        function checkForMatch() {
+            let [card1, card2] = flippedCards;
+
+            if (card1.dataset.emoji === card2.dataset.emoji) {
+                card1.classList.add("matched");
+                card2.classList.add("matched");
+                flippedCards = [];
+                matchedPairs++;
+
+                if (matchedPairs === emojis.length) {
+                    setTimeout(() => {
+                        alert("🎉 Selamat! Kamu berhasil menyelesaikan game dalam " + moves + " gerakan!");
+                    }, 300);
+                }
+            } else {
+                isLocked = true;
+                setTimeout(() => {
+                    card1.classList.remove("flipped");
+                    card1.innerText = "❓";
+                    card2.classList.remove("flipped");
+                    card2.innerText = "❓";
+                    flippedCards = [];
+                    isLocked = false;
+                }, 800);
+            }
+        }
+
+        // Jalankan game saat pertama kali dibuka
+        startGame();
+    </script>
+</body>
+</html>

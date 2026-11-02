@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Game Suit Pintar</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #090d16, #1e1b4b);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 360px;
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            font-size: 20px;
+            color: #38bdf8;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+        /* Papan Skor */
+        .score-board {
+            display: flex;
+            justify-content: space-around;
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
+        }
+        .score-item {
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+        .score-num {
+            font-size: 20px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        /* Kotak Pertempuran */
+        .battle-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 15px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
+        }
+        .player-choice, .computer-choice {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .choice-icon {
+            font-size: 36px;
+            margin-top: 5px;
+        }
+        .vs {
+            font-size: 16px;
+            font-weight: bold;
+            color: #f43f5e;
+        }
+        /* Kotak Hasil */
+        .result-box {
+            font-size: 16px;
+            font-weight: bold;
+            color: #facc15;
+            margin-bottom: 20px;
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Tombol Pilihan */
+        .choices-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .btn-choice {
+            background: #334155;
+            border: none;
+            padding: 12px 0;
+            border-radius: 12px;
+            font-size: 26px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .btn-choice:active {
+            transform: scale(0.92);
+            background: #475569;
+        }
+        .btn-reset {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px;
+            font-size: 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+        .btn-reset:active {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🎮 Suit Jepang</h1>
+        <div class="subtitle">Batu - Gunting - Kertas</div>
+
+        <!-- Papan Skor -->
+        <div class="score-board">
+            <div class="score-item">
+                Kamu<br><span id="player-score" class="score-num">0</span>
+            </div>
+            <div class="score-item">
+                Seri<br><span id="draw-score" class="score-num">0</span>
+            </div>
+            <div class="score-item">
+                Bot<br><span id="computer-score" class="score-num">0</span>
+            </div>
+        </div>
+
+        <!-- Area Pertempuran -->
+        <div class="battle-area">
+            <div>
+                <div class="player-choice">Kamu</div>
+                <div id="player-display" class="choice-icon">❔</div>
+            </div>
+            <div class="vs">VS</div>
+            <div>
+                <div class="computer-choice">Komputer</div>
+                <div id="computer-display" class="choice-icon">❔</div>
+            </div>
+        </div>
+
+        <!-- Teks Hasil -->
+        <div id="game-result" class="result-box">Pilih salah satu di bawah!</div>
+
+        <!-- Tombol Pilihan -->
+        <div class="choices-grid">
+            <button class="btn-choice" onclick="playGame('batu')">🧱</button>
+            <button class="btn-choice" onclick="playGame('gunting')">✂️</button>
+            <button class="btn-choice" onclick="playGame('kertas')">📄</button>
+        </div>
+
+        <button class="btn-reset" onclick="resetScore()">Reset Skor 🔄</button>
+    </div>
+
+    <script>
+        let playerScore = 0;
+        let computerScore = 0;
+        let drawScore = 0;
+
+        const icons = {
+            'batu': '🧱',
+            'gunting': '✂️',
+            'kertas': '📄'
+        };
+
+        function playGame(playerChoice) {
+            const choices = ['batu', 'gunting', 'kertas'];
+            const computerChoice = choices[Math.floor(Math.random() * choices.length)];
+
+            // Tampilkan ikon pilihan
+            document.getElementById("player-display").innerText = icons[playerChoice];
+            document.getElementById("computer-display").innerText = icons[computerChoice];
+
+            let resultText = "";
+            let resultColor = "#facc15";
+
+            if (playerChoice === computerChoice) {
+                resultText = "SERI! 🤝";
+                drawScore++;
+                resultColor = "#94a3b8";
+            } else if (
+                (playerChoice === 'batu' && computerChoice === 'gunting') ||
+                (playerChoice === 'gunting' && computerChoice === 'kertas') ||
+                (playerChoice === 'kertas' && computerChoice === 'batu')
+            ) {
+                resultText = "KAMU MENANG! 🎉";
+                playerScore++;
+                resultColor = "#34d399";
+            } else {
+                resultText = "KAMU KALAH! 😢";
+                computerScore++;
+                resultColor = "#f43f5e";
+            }
+
+            // Perbarui tampilan skor
+            document.getElementById("player-score").innerText = playerScore;
+            document.getElementById("draw-score").innerText = drawScore;
+            document.getElementById("computer-score").innerText = computerScore;
+
+            // Perbarui teks hasil
+            let resBox = document.getElementById("game-result");
+            resBox.innerText = resultText;
+            resBox.style.color = resultColor;
+        }
+
+        function resetScore() {
+            playerScore = 0;
+            computerScore = 0;
+            drawScore = 0;
+
+            document.getElementById("player-score").innerText = "0";
+            document.getElementById("draw-score").innerText = "0";
+            document.getElementById("computer-score").innerText = "0";
+            
+            document.getElementById("player-display").innerText = "❔";
+            document.getElementById("computer-display").innerText = "❔";
+            
+            let resBox = document.getElementById("game-result");
+            resBox.innerText = "Pilih salah satu di bawah!";
+            resBox.style.color = "#facc15";
+        }
+    </script>
+</body>
+</html>

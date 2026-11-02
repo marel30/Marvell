@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Game Tebak Angka</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #0f172a, #1e1b4b);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 350px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        }
+        .icon {
+            font-size: 45px;
+            margin-bottom: 10px;
+        }
+        h1 {
+            font-size: 20px;
+            color: #38bdf8;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+        .hint-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 15px;
+            color: #f43f5e;
+            font-weight: bold;
+            margin-bottom: 20px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 18px;
+            text-align: center;
+            border-radius: 10px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: #fff;
+            outline: none;
+        }
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .btn {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+            transition: 0.2s;
+        }
+        .btn:active {
+            transform: scale(0.97);
+            background: #0284c7;
+        }
+        .btn-reset {
+            background: #ef4444;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+        .btn-reset:active {
+            background: #dc2626;
+        }
+        .stats {
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="icon">🎯</div>
+        <h1>Tebak Angka</h1>
+        <div class="subtitle">Tebak angka antara 1 sampai 50!</div>
+
+        <div id="hint" class="hint-box">Masukkan tebakanmu di bawah ini ya!</div>
+
+        <div class="input-group">
+            <input type="number" id="user-guess" placeholder="Ketik angka..." min="1" max="50">
+        </div>
+
+        <button class="btn" id="submit-btn" onclick="checkGuess()">Tebak Sekarang 🚀</button>
+        <button class="btn btn-reset" id="reset-btn" onclick="resetGame()" style="display: none;">Main Lagi 🔄</button>
+
+        <div class="stats" id="stats-text">Jumlah Percobaan: 0</div>
+    </div>
+
+    <script>
+        let secretNumber = Math.floor(Math.random() * 50) + 1;
+        let attempts = 0;
+        let gameOver = false;
+
+        function checkGuess() {
+            if (gameOver) return;
+
+            let inputElem = document.getElementById("user-guess");
+            let guess = parseInt(inputElem.value);
+            let hintElem = document.getElementById("hint");
+            let statsElem = document.getElementById("stats-text");
+
+            if (isNaN(guess) || guess < 1 || guess > 50) {
+                hintElem.style.color = "#f59e0b";
+                hintElem.innerText = "⚠️ Masukkan angka yang valid antara 1 - 50!";
+                return;
+            }
+
+            attempts++;
+            statsElem.innerText = "Jumlah Percobaan: " + attempts;
+
+            if (guess === secretNumber) {
+                hintElem.style.color = "#34d399";
+                hintElem.innerText = "🎉 Selamat! Angka yang benar adalah " + secretNumber + ". Kamu berhasil dalam " + attempts + " percobaan!";
+                endGame();
+            } else if (guess < secretNumber) {
+                hintElem.style.color = "#38bdf8";
+                hintElem.innerText = "📈 Terlalu KECIL! Coba angka yang lebih besar.";
+            } else {
+                hintElem.style.color = "#f43f5e";
+                hintElem.innerText = "📉 Terlalu BESAR! Coba angka yang lebih kecil.";
+            }
+
+            inputElem.value = "";
+            inputElem.focus();
+        }
+
+        function endGame() {
+            gameOver = true;
+            document.getElementById("user-guess").disabled = true;
+            document.getElementById("submit-btn").style.display = "none";
+            document.getElementById("reset-btn").style.display = "block";
+        }
+
+        function resetGame() {
+            secretNumber = Math.floor(Math.random() * 50) + 1;
+            attempts = 0;
+            gameOver = false;
+            
+            let hintElem = document.getElementById("hint");
+            hintElem.style.color = "#f43f5e";
+            hintElem.innerText = "Permainan baru dimulai! Silakan tebak lagi.";
+            
+            let inputElem = document.getElementById("user-guess");
+            inputElem.value = "";
+            inputElem.disabled = false;
+            inputElem.focus();
+
+            document.getElementById("submit-btn").style.display = "block";
+            document.getElementById("reset-btn").style.display = "none";
+            document.getElementById("stats-text").innerText = "Jumlah Percobaan: 0";
+        }
+    </script>
+</body>
+</html>
